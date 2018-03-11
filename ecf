@@ -1,0 +1,199 @@
+#!/bin/sh -e
+
+#-----------------------------------------------------------------------
+# Function      : Edit Configuration File for OpenStack
+#
+# Syntax        : ecf {--set|--add} [--existing] config_file section
+#		    [param] [value]
+#
+#		  --add : Support for multi valued parameter
+#		  --existing : Not yet supported (skip)
+#
+# Author        : Takeshi Yonezu <tkyonezu@gmail.com>
+#
+# Copyright (c) 2014 Takeshi Yonezu
+# All Rights Reserved.
+#-----------------------------------------------------------------------
+# No   Date       Author       Change History
+#-----------------------------------------------------------------------
+# 0001 2014/07/31 T.Yonezu     First Release
+#-----------------------------------------------------------------------
+
+T=/var/tmp/$(basename $0)_section_$$
+
+function usage {
+  echo "Usage: $(basename $0) {--set|--add} [--existing] config_file section [param] [value]" >&2
+  exit $1
+}
+
+function getargs {
+  nargs=$#
+
+  update=0
+
+  nocfgfile=1
+  nosection=1
+  noparam=1
+  novalue=1
+  
+  i=0
+  n=0
+  while [ ${i} -lt ${nargs} ]; do
+    if [ "$1" = "--set" -o "$1" = "--add" ]; then
+      mode="$1"
+    elif [ "$1" = "--existing" ]; then
+      update=1
+    else
+      if [ ${n} -eq 0 ]; then
+        cfgfile="$1"
+	nocfgfile=0
+      elif [ ${n} -eq 1 ]; then
+        section="$1"
+	nosection=0
+      elif [ ${n} -eq 2 ]; then
+        param="$1"
+	noparam=0
+      elif [ ${n} -eq 3 ]; then
+        value="$1"
+	novalue=0
+      else
+	usage 1
+      fi
+      ((n+=1))
+    fi
+    ((i+=1))
+    shift
+  done
+}
+
+function editline {
+  if [ ${noparam} -eq 1 ]; then
+    sed -i "${1}a\\[${section}\]" ${cfgfile}
+  elif [ ${novalue} -eq 1 ]; then
+    if [ ${existing} -eq 0 ]; then
+      sed -i "${1}a\\${param}" ${cfgfile}
+    fi
+  else
+    # For multi valued parameter
+    if [ ${existing} -eq 1 -a "${mode}" != "--add" ]; then
+      sed -i "${1}c\\${param}=${value}" ${cfgfile}
+    else
+      sed -i "${1}a\\${param}=${value}" ${cfgfile}
+    fi
+  fi
+}
+
+function editconf {
+  cat -n ${cfgfile} | sed -n "/^ *[0-9]*	\[${section}\]/,/^ *[0-9]*	\[.*\]/p" >${T}
+
+  # Current line of the Parameter
+  if [ ${noparam} -eq 1 ]; then
+      E=$(cat ${T} | grep "^ *[0-9]*	\[${section}\]" | awk '{ print $1 }')
+  else
+    if [ ${novalue} -eq 1 ]; then
+      E=$(cat ${T} | grep "^ *[0-9]*	${param}" | awk '{ print $1 }')
+    else
+      E=$(cat ${T} | grep "^ *[0-9]*	${param} *=" | awk '{ print $1 }')
+    fi
+  fi
+
+  # Comment outed Parameter line
+  if [ ${novalue} -eq 1 ]; then
+    C=$(cat ${T} | grep "^ *[0-9]*	# *${param}" | awk '{ print $1 }')
+  else
+    C=$(cat ${T} | grep "^ *[0-9]*	# *${param} *=" | awk '{ print $1 }')
+  fi
+
+  # Last line of the Section
+  N=$(cat ${T} | tail -1 | awk '{ print $1 }')
+
+  # Last line of the Configuration File
+  G=$(wc -l ${cfgfile} | cut -d' ' -f1)
+
+  E=$(echo ${E} | awk '{ print $NF }')
+
+  isfirst=1
+  isbreak=0
+
+  for i in ${C}; do
+    num=$((i+1))
+    if [ "$(cat ${cfgfile} | sed -n "${num}p" | cut -c1-1)" != "#" ]; then
+      if [ ${num} -le ${G} ]; then
+        C=${i}
+      else
+	C=${G}
+      fi
+      isbreak=1
+      break
+    fi
+    if [ ${isfirst} -eq 1 ]; then
+      Ctmp=${i}
+      isfirst=0
+    fi
+  done
+
+  if [ ${isbreak} -eq 0 ]; then
+    C=${Ctmp}
+  fi
+
+  # If Parameter Line already exist, replace it with value
+  existing=0
+  if [ "${E}" != "" ]; then
+    if [ ${noparam} -eq 0 ]; then
+      existing=1
+      editline ${E}
+    fi
+  else
+    # If Section does not exist yet, add section line
+    if [ "${N}" = "" ]; then
+      N=${G}
+      if [ ${noparam} -eq 1 ]; then
+        editline ${N}
+	rm -f ${T}
+	return
+      else
+	noparam=1	# Trick for add section line
+        editline ${N}
+	noparam=0
+      fi
+      ((N+=1))
+    fi
+
+    # Last line of the Section adjustment
+    if [ $N -lt $G ]; then
+      ((N-=1))
+    fi
+
+    # If Parameter line does not exist, use Last line of the Section
+    if [ -z ${C} ]; then
+      C=${N}
+      if [ "$(cat ${cfgfile} | sed -n "${N}p" | cut -c1-1)" = "" ]; then
+        ((C-=1))
+      fi
+    fi
+  
+    # Add Paramete line with Value
+    editline ${C}
+  fi
+
+  rm -f ${T}
+}
+
+getargs "$@"
+
+if [ ${nocfgfile} -eq 1 -o ${nosection} -eq 1 ]; then
+  usage 1
+fi
+
+if [ "${mode}" != "--set" -a "${mode}" != "--add" ]; then
+  usage 1
+fi
+
+if [ ! -f ${cfgfile} ]; then
+  echo "ERROR: ${cfgfile}: file not found." >&2
+  exit 1
+fi
+
+editconf
+
+exit 0

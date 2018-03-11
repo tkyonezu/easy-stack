@@ -314,10 +314,18 @@ PUB_GATEWAY=10.0.2.1
 # Prerequisites
 cat <<EOF >/var/tmp/keystone.sql
 CREATE DATABASE keystone;
-GRANT ALL PRIVILEGES ON keystone.* TO 'keystone'@'localhost' IDENTIFIED BY 'KEYSTONE_DBPASS';
-GRANT ALL PRIVILEGES ON keystone.* TO 'keystone'@'%' IDENTIFIED BY 'KEYSTONE_DBPASS';
+GRANT ALL PRIVILEGES ON keystone.* TO 'keystone'@'localhost' IDENTIFIED BY '${KEYSTONE_DBPASS}';
+GRANT ALL PRIVILEGES ON keystone.* TO 'keystone'@'%' IDENTIFIED BY '${KEYSTONE_DBPASS}';
+FLUSH PRIVILEGES;
 EXIT
 EOF
+
+mysql </var/tmp/keystone.sql
+
+rm /var/tmp/keystone.sql
+
+# Install and configure components
+apt install -y keystone apache2 libapache2-mod-wsgi
 
 #
 # Image service
