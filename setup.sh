@@ -15,6 +15,12 @@ function error {
   exit 1
 }
 
+if [ ! -x /usr/local/bin/ecf ]; then
+  logmsg "Install ecf (Edit Configuration File) script"
+  cp ecf /usr/local/bin
+  chmod +x /usr/local/bin/ecf
+fi
+
 #
 # OpenStack Installations Guide for Queens
 # https://docs.openstack.org/queens/install/
@@ -45,49 +51,52 @@ PUB_NETWORK=10.0.2.0
 PUB_NETMASK=255.255.255.0
 PUB_GATEWAY=10.0.2.1
 
-## #
-## # OpenStack Queens Administrator Guide
-## # https://docs.openstack.org/queens/admin/
-## #
-## 
-## #
-## # Security
-## # https://docs.openstack.org/install-guide/environment-security.html
-## #
-## logmsg "Make Passwords for OpenStack"
-## 
-## function makekeys {
-##   echo "# Generate OpenStack passwords on $(env LC_ALL=C date)"
-##   echo
-##   echo "ADMIN_PASS=$(openssl rand -hex 10)"
-##   echo "CINDER_DBPASS=$(openssl rand -hex 10)"
-##   echo "CINDER_PASS=$(openssl rand -hex 10)"
-##   echo "DASH_PASS=$(openssl rand -hex 10)"
-##   echo "DEMO_PASS=$(openssl rand -hex 10)"	# Password of user demo
-##   echo "GLANCE_DBPASS=$(openssl rand -hex 10)"
-##   echo "GLANCE_PASS=$(openssl rand -hex 10)"
-##   echo "KEYSTONE_DBPASS=$(openssl rand -hex 10)"
-##   echo "METADATA_SECRET=$(openssl rand -hex 10)"
-##   echo "NEUTRON_DBPASS=$(openssl rand -hex 10)"
-##   echo "NEUTRON_PASS=$(openssl rand -hex 10)"
-##   echo "NOVA_DBPASS=$(openssl rand -hex 10)"
-##   echo "NOVA_PASS=$(openssl rand -hex 10)"
-##   echo "PLACEMENT_PASS=$(openssl rand -hex 10)"
-##   echo "RABBIT_PASS=$(openssl rand -hex 10)"
-## }
-## 
-## if [ -f openstack.key ]; then
-##   echo -n ">>> openstack.key exists. Do you want recreate it? (y/n) "
-##   read ans
-##   if [ "${ans}" = "y" ]; then
-##     makekeys | tee -a openstack.key
-##   fi
-## else
-##   makekeys | tee -a openstack.key
-## fi
-## 
-## . ./openstack.key
-## 
+# Controller Node
+CONTROLLER=${PRIV_HOST}
+
+#
+# OpenStack Queens Administrator Guide
+# https://docs.openstack.org/queens/admin/
+#
+
+#
+# Security
+# https://docs.openstack.org/install-guide/environment-security.html
+#
+logmsg "Make Passwords for OpenStack"
+
+function makekeys {
+  echo "# Generate OpenStack passwords on $(env LC_ALL=C date)"
+  echo
+  echo "ADMIN_PASS=$(openssl rand -hex 10)"
+  echo "CINDER_DBPASS=$(openssl rand -hex 10)"
+  echo "CINDER_PASS=$(openssl rand -hex 10)"
+  echo "DASH_PASS=$(openssl rand -hex 10)"
+  echo "DEMO_PASS=$(openssl rand -hex 10)"	# Password of user demo
+  echo "GLANCE_DBPASS=$(openssl rand -hex 10)"
+  echo "GLANCE_PASS=$(openssl rand -hex 10)"
+  echo "KEYSTONE_DBPASS=$(openssl rand -hex 10)"
+  echo "METADATA_SECRET=$(openssl rand -hex 10)"
+  echo "NEUTRON_DBPASS=$(openssl rand -hex 10)"
+  echo "NEUTRON_PASS=$(openssl rand -hex 10)"
+  echo "NOVA_DBPASS=$(openssl rand -hex 10)"
+  echo "NOVA_PASS=$(openssl rand -hex 10)"
+  echo "PLACEMENT_PASS=$(openssl rand -hex 10)"
+  echo "RABBIT_PASS=$(openssl rand -hex 10)"
+}
+
+if [ -f openstack.key ]; then
+  echo -n ">>> openstack.key exists. Do you want recreate it? (y/n) "
+  read ans
+  if [ "${ans}" = "y" ]; then
+    makekeys | tee -a openstack.key
+  fi
+else
+  makekeys | tee -a openstack.key
+fi
+
+. ./openstack.key
+
 ## #
 ## # Host networking
 ## # https://docs.openstack.org/install-guide/environment-networking.html
@@ -264,11 +273,11 @@ PUB_GATEWAY=10.0.2.1
 ## data-dir: /var/lib/etcd
 ## initial-cluster-state: 'new'
 ## initial-cluster-token: 'etcd-cluster-01'
-## initial-cluster: controller=http://${PRIV_IP}:2380
-## initial-advertise-peer-urls: http://${PRIV_IP}:2380
-## advertise-client-urls: http://${PRIV_IP}:2379
+## initial-cluster: controller=http://${CONTROLLER}:2380
+## initial-advertise-peer-urls: http://${CONTROLLER}:2380
+## advertise-client-urls: http://${CONTROLLER}:2379
 ## listen-peer-urls: http://0.0.0.0:2380
-## listen-client-urls: http://${PRIV_IP}:2379
+## listen-client-urls: http://${CONTROLLER}:2379
 ## EOF
 ## fi
 ## 
@@ -310,8 +319,11 @@ PUB_GATEWAY=10.0.2.1
 # Install and Configure
 # https://docs.openstack.org/keystone/queens/install/keystone-install-ubuntu.html
 #
+logmsg "Install and Configure KEYSTONE"
 
+#
 # Prerequisites
+#
 cat <<EOF >/var/tmp/keystone.sql
 CREATE DATABASE keystone;
 GRANT ALL PRIVILEGES ON keystone.* TO 'keystone'@'localhost' IDENTIFIED BY '${KEYSTONE_DBPASS}';
@@ -324,8 +336,51 @@ mysql </var/tmp/keystone.sql
 
 rm /var/tmp/keystone.sql
 
+#
 # Install and configure components
+#
 apt install -y keystone apache2 libapache2-mod-wsgi
+
+ecf --set /etc/keystone/keystone.conf database connection mysql+pymysql://keystone:${KEYSTONE_DBPASS}@${CONTROLLER}/keystone
+ecf --add /etc/keystone/keystone.conf token provider fernet
+
+su -s /bin/sh -c "keystone-manage db_sync" keystone
+
+keystone-manage fernet_setup --keystone-user keystone --keystone-group keystone
+keystone-manage credential_setup --keystone-user keystone --keystone-group keystone
+
+keystone-manage bootstrap --bootstrap-password ${ADMIN_PASS} \
+  --bootstrap-admin-url http://${CONTROLLER}:5000/v3/ \
+  --bootstrap-internal-url http://${CONTROLLER}:5000/v3/ \
+  --bootstrap-public-url http://${CONTROLLER}:5000/v3/ \
+  --bootstrap-region-id RegionOne
+
+#
+# Configure the Apache HTTP Server
+#
+logmsg "Configure the Apache HTTP Server"
+
+if ! grep -q ${CONTROLLER} /etc/apache2/sites-available/000-default.conf; then
+  sed -i "/#ServerName/aServerName ${CONTROLLER}" /etc/apache2/sites-available/000-default.conf
+  sed -i "/${CONTROLLER}/s/^/\t/" /etc/apache2/sites-available/000-default.conf
+fi
+
+service apache2 restart
+
+#
+# Configure the administrative account
+#
+logmsg "Configure the administrative account"
+
+cat <<EOF >~/keystonerc_admin
+export OS_USERNAME=admin
+export OS_PASSWORD=${ADMIN_PASS}
+export OS_PROJECT_NAME=admin
+export OS_USER_DOMAIN_NAME=Default
+export OS_PROJECT_DOMAIN_NAME=Default
+export OS_AUTH_URL=http://${CONTROLLER}:5000/v3
+export OS_IDENTITY_API_VERSION=3
+EOF
 
 #
 # Image service
