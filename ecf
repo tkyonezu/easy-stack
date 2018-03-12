@@ -1,4 +1,4 @@
-#!/bin/sh -e
+#!/bin/bash -e
 
 #-----------------------------------------------------------------------
 # Function      : Edit Configuration File for OpenStack
@@ -76,9 +76,9 @@ function editline {
   else
     # For multi valued parameter
     if [ ${existing} -eq 1 -a "${mode}" != "--add" ]; then
-      sed -i "${1}c\\${param}=${value}" ${cfgfile}
+      sed -i "${1}c\\${param} = ${value}" ${cfgfile}
     else
-      sed -i "${1}a\\${param}=${value}" ${cfgfile}
+      sed -i "${1}a\\${param} = ${value}" ${cfgfile}
     fi
   fi
 }
