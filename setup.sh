@@ -347,6 +347,11 @@ ecf --add /etc/keystone/keystone.conf token provider fernet
 su -s /bin/sh -c "keystone-manage db_sync" keystone
 
 keystone-manage fernet_setup --keystone-user keystone --keystone-group keystone
+# usage: keystone-manage [bootstrap|db_sync|db_version|domain_config_upload|fernet_rotate|fernet_setup|mapping_populate|mapping_purge|mapping_engine|pki_setup|saml_idp_metadata|ssl_setup|token_flush]
+# keystone-manage: error: argument command: invalid choice: 'credential_setup' (choose from 'bootstrap', 'db_sync', 'db_version', 'domain_config_upload', 'fernet_rotate', 'fernet_setup', 'mapping_populate', 'mapping_purge', 'mapping_engine', 'pki_setup', 'saml_idp_metadata', 'ssl_setup', 'token_flush')
+#
+# keystone-manage credential_setup 
+# https://bugs.launchpad.net/openstack-manuals/+bug/1688653
 keystone-manage credential_setup --keystone-user keystone --keystone-group keystone
 
 keystone-manage bootstrap --bootstrap-password ${ADMIN_PASS} \
