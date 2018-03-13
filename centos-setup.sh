@@ -138,16 +138,16 @@ systemctl start chronyd.service
 # OpenStack Packages
 # https://docs.openstack.org/install-guide/environment-packages.html
 #
-# OpenStack Packages for Ubuntu
-# https://docs.openstack.org/install-guide/environment-packages-ubuntu.html
+# OpenStack Packages for RHEL and CentOS
+# https://docs.openstack.org/install-guide/environment-packages-rdo.html
 #
-logmsg "Setup OpenStack repository"
+logmsg "Enable the OpenStack repository (Queens)"
 
 # Enable the OpenStack repository
 yum install -y centos-release-openstack-queens
 
 # Finalize the installation
-logmsg "Update Ubuntu software"
+logmsg "Update CentOS software"
 
 yum upgrade -y
 
@@ -161,16 +161,17 @@ yum install -y openstack-selinux
 # SQL database
 # https://docs.openstack.org/install-guide/environment-sql-database.html
 #
-# SQL database for Ubuntu
-# https://docs.openstack.org/install-guide/environment-sql-database-ubuntu.html
+# SQL database for RHEL and CentOS
+# https://docs.openstack.org/install-guide/environment-sql-database-rdo.html
 #
 logmsg "Install and Setup SQL Database"
 
 # Install and configure components
 yum install mariadb mariadb-server python2-PyMySQL
 
-if [ ! -f /etc/mysql/mariadb.conf.d/99-openstack.cnf ]; then
-  cat <<EOF >/etc/mysql/mariadb.conf.d/99-openstack.cnf
+if ! grep -q ${PRIV_IP} /etc/my.cnf.d/mysql-clients.cnf; then
+  cat <<EOF >>/etc/my.cnf.d/mysql-clients.cnf
+
 [mysqld]
 bind-address = ${PRIV_IP}
 
@@ -192,8 +193,8 @@ mysql_secure_installation
 # Message queue
 # https://docs.openstack.org/install-guide/environment-messaging.html
 #
-# Message queue for Ubuntu
-# https://docs.openstack.org/install-guide/environment-messaging-ubuntu.html
+# Message queue for RHEL and CetnOS
+# https://docs.openstack.org/install-guide/environment-messaging-rdo.html
 #
 logmsg "Install and Setup Message queue"
 
@@ -211,44 +212,45 @@ rabbitmqctl set_permissions openstack ".*" ".*" ".*"
 # Memcached
 # https://docs.openstack.org/install-guide/environment-memcached.html
 #
-# Memcached for Ubuntu
-# https://docs.openstack.org/install-guide/environment-memcached-ubuntu.html
+# Memcached for RHEL and CentOS
+# https://docs.openstack.org/install-guide/environment-memcached-rdo.html
 #
 logmsg "Install and Setup Memcached"
 
 # Install and configure components
 yum install -y memcached python-memcached
 
-if ! grep -q "${PRIV_IP}" /etc/memcached.conf; then
-  sed -i -e 's/^-l 127.0.0.1/#&/' -e "/^#-l 127.0.0.1/a-l ${PRIV_IP}" /etc/memcached.conf
+if ! grep -q "${PRIV_IP}" /etc/sysconfig/memcached; then
+  sed -i "s/^OPTIONS=.*/OPTIONS=\"-l 127.0.0.1,::1,${PRIV_IP}\"/" /etc/sysconfig/memcached
 fi
 
 # Finalize installation
-service memcached restart
+systemctl enable memcached.service
+systemctl start memcached.service
 
 #
 # Etcd
 # https://docs.openstack.org/install-guide/environment-etcd.html
 #
-# Etcd for Ubuntu
-# https://docs.openstack.org/install-guide/environment-etcd-ubuntu.html
+# Etcd for RHEL and CentOS
+# https://docs.openstack.org/install-guide/environment-etcd-rdo.html
 #
 logmsg "Install and Setup Etcd"
 
 yum install -y etcd
 
 # Edit /etc/etcd/etcd.conf
-# #[Member]
-# ETCD_DATA_DIR="/var/lib/etcd/default.etcd"
-# ETCD_LISTEN_PEER_URLS="http://10.0.0.11:2380"
-# ETCD_LISTEN_CLIENT_URLS="http://10.0.0.11:2379"
-# ETCD_NAME="controller"
-# #[Clustering]
-# ETCD_INITIAL_ADVERTISE_PEER_URLS="http://10.0.0.11:2380"
-# ETCD_ADVERTISE_CLIENT_URLS="http://10.0.0.11:2379"
-# ETCD_INITIAL_CLUSTER="controller=http://10.0.0.11:2380"
-# ETCD_INITIAL_CLUSTER_TOKEN="etcd-cluster-01"
-# ETCD_INITIAL_CLUSTER_STATE="new"
+if ! grep -q ${CONTROLLER} /etc/etcd/etcd.conf; then
+  sed -i 's/ETCD_DATA_DIR=.*/ETCD_DATA_DIR="\/var\/lib\/etcd\/default.etcd"/' /etc/etcd/etcd.conf
+  sed -i "s/#ETCD_LISTEN_PEER_URLS=.*/ETCD_LISTEN_PEER_URLS=\"http:\/\/${CONTROLLER}:2380\"/" /etc/etcd/etcd.conf
+  sed -i "s/ETCD_LISTEN_CLIENT_URLS=.*/ETCD_LISTEN_CLIENT_URLS=\"http:\/\/${CONTROLLER}:2379\"/" /etc/etcd/etcd.conf
+  sed -i 's/ETCD_NAME=.*/ETCD_NAME="controller"/' /etc/etcd/etcd.conf
+  sed -i "s/#ETCD_INITIAL_ADVERTISE_PEER_URLS=.*/ETCD_INITIAL_ADVERTISE_PEER_URLS=\"http:\/\/${CONTROLLER}:2380\"/" /etc/etcd/etcd.conf
+  sed -i "s/ETCD_ADVERTISE_CLIENT_URLS=.*/ETCD_ADVERTISE_CLIENT_URLS=\"http:\/\/${CONTROLLER}:2379\"/" /etc/etcd/etcd.conf
+  sed -i "s/#ETCD_INITIAL_CLUSTER=.*/ETCD_INITIAL_CLUSTER=\"controller=http:\/\/${CONTROLLER}:2380\"/" /etc/etcd/etcd.conf
+  sed -i 's/#ETCD_INITIAL_CLUSTER_TOKEN=.*/ETCD_INITIAL_CLUSTER_TOKEN="etcd-cluster-01"/' /etc/etcd/etcd.conf
+  sed -i 's/#ETCD_INITIAL_CLUSTER_STATE=.*/ETCD_INITIAL_CLUSTER_STATE="new"/' /etc/etcd/etcd.conf
+fi
 
 # Finalize installation
 systemctl enable etcd
@@ -268,7 +270,7 @@ systemctl start etcd
 
 #
 # Install and Configure
-# https://docs.openstack.org/keystone/queens/install/keystone-install-ubuntu.html
+# https://docs.openstack.org/keystone/queens/install/keystone-install-rdo.html
 #
 logmsg "Install and Configure KEYSTONE"
 
@@ -290,23 +292,20 @@ rm /var/tmp/keystone.sql
 #
 # Install and configure components
 #
-apt install -y keystone apache2 libapache2-mod-wsgi
+yum install -y openstack-keystone httpd mod-wsgi
 
-ecf --set /etc/keystone/keystone.conf database connection mysql+pymysql://keystone:${KEYSTONE_DBPASS}@${CONTROLLER}/keystone
-ecf --add /etc/keystone/keystone.conf token provider fernet
+if ! grep -q ${CONTROLLER} /etc/keystone/keystone.conf; then
+  ecf --set /etc/keystone/keystone.conf database connection mysql+pymysql://keystone:${KEYSTONE_DBPASS}@${CONTROLLER}/keystone
+  ecf --add /etc/keystone/keystone.conf token provider fernet
+fi
 
 su -s /bin/sh -c "keystone-manage db_sync" keystone
 
 keystone-manage fernet_setup --keystone-user keystone --keystone-group keystone
-# usage: keystone-manage [bootstrap|db_sync|db_version|domain_config_upload|fernet_rotate|fernet_setup|mapping_populate|mapping_purge|mapping_engine|pki_setup|saml_idp_metadata|ssl_setup|token_flush]
-# keystone-manage: error: argument command: invalid choice: 'credential_setup' (choose from 'bootstrap', 'db_sync', 'db_version', 'domain_config_upload', 'fernet_rotate', 'fernet_setup', 'mapping_populate', 'mapping_purge', 'mapping_engine', 'pki_setup', 'saml_idp_metadata', 'ssl_setup', 'token_flush')
-#
-# keystone-manage credential_setup 
-# https://bugs.launchpad.net/openstack-manuals/+bug/1688653
 keystone-manage credential_setup --keystone-user keystone --keystone-group keystone
 
 keystone-manage bootstrap --bootstrap-password ${ADMIN_PASS} \
-  --bootstrap-admin-url http://${CONTROLLER}:5000/v3/ \
+  --bootstrap-admin-url http://${CONTROLLER}:35357/v3/ \
   --bootstrap-internal-url http://${CONTROLLER}:5000/v3/ \
   --bootstrap-public-url http://${CONTROLLER}:5000/v3/ \
   --bootstrap-region-id RegionOne
