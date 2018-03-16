@@ -15,10 +15,12 @@ function error {
   exit 1
 }
 
-if [ ! -x /usr/local/bin/ecf ]; then
+ECF=/usr/local/bin/ecf
+
+if [ ! -x ${ECF} ]; then
   logmsg "Install ecf (Edit Configuration File) script"
   cp ecf /usr/local/bin
-  chmod +x /usr/local/bin/ecf
+  chmod +x ${ECF}
 fi
 
 #
@@ -299,8 +301,8 @@ rm /var/tmp/keystone.sql
 yum install -y openstack-keystone httpd mod-wsgi
 
 if ! grep -q ${CONTROLLER} /etc/keystone/keystone.conf; then
-  ecf --set /etc/keystone/keystone.conf database connection mysql+pymysql://keystone:${KEYSTONE_DBPASS}@${CONTROLLER}/keystone
-  ecf --add /etc/keystone/keystone.conf token provider fernet
+  ${ECF} --set /etc/keystone/keystone.conf database connection mysql+pymysql://keystone:${KEYSTONE_DBPASS}@${CONTROLLER}/keystone
+  ${ECF} --add /etc/keystone/keystone.conf token provider fernet
 fi
 
 su -s /bin/sh -c "keystone-manage db_sync" keystone
@@ -378,8 +380,8 @@ openstack endpoint create --region RegionOne image admin http://${CONTROLLER}:92
 #
 apt install -y glance
 
-## ecf --set /etc/glance/glance-api.conf database connection mysql+pymysql://glance:${GLANCE_DBPASS}@${CONTROLLER}/glance
-## ecf --add /etc/keystone/keystone.conf token provider fernet
+## ${ECF} --set /etc/glance/glance-api.conf database connection mysql+pymysql://glance:${GLANCE_DBPASS}@${CONTROLLER}/glance
+## ${ECF} --add /etc/keystone/keystone.conf token provider fernet
 
 ## su -s /bin/sh -c "keystone-manage db_sync" keystone
 
