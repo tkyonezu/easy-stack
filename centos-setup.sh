@@ -52,8 +52,7 @@ PUB_NETMASK=255.255.255.0
 PUB_GATEWAY=10.0.2.1
 
 # Controller Node
-CONTROLLER=${PRIV_HOST}
-CONTROLLER_IP=$(PRIV_IP)
+CONTROLLER=${PRIV_IP}
 
 #
 # OpenStack Queens Administrator Guide
@@ -109,7 +108,7 @@ sed -i '/^BOOTPROTO=/s/dhcp/none/' \
 
 sed -i 's/^127.0.1.1/#&/' /etc/hosts
 
-if ! grep -q "^${PRIV_IP}" hosts; then
+if ! grep -q "^${PRIV_IP}" /etc/hosts; then
   cat <<EOF >>/etc/hosts
 
 ${PRIV_IP} ${PRIV_HOST}
@@ -124,12 +123,12 @@ logmsg "Insall and Setup NTP"
 
 yum install -y chrony
 
-if ! grep -q "ntp.nict.jp" /etc/chrony/chrony.conf; then
-  sed -i '/^pool 2.debian.pool.ntp.org offline iburst/iserver ntp.nict.jp iburst \n' /etc/chrony/chrony.conf
+if ! grep -q "ntp.nict.jp" /etc/chrony.conf; then
+  sed -i '/^pool 2.debian.pool.ntp.org offline iburst/iserver ntp.nict.jp iburst \n' /etc/chrony.conf
 fi
 
-if ! grep -q "${PRIV_NETCIDR}" /etc/chrony/chrony.conf; then
-  sed -i "/^#allow ::\/0/aallow ${PRIV_NETCIDR}\nallow ${PRIV_NET6CIDR}" /etc/chrony/chrony.conf
+if ! grep -q "${PRIV_NETCIDR}" /etc/chrony.conf; then
+  sed -i "/^#allow ::\/0/aallow ${PRIV_NETCIDR}\nallow ${PRIV_NET6CIDR}" /etc/chrony.conf
 fi
 
 systemctl enable chronyd.service
@@ -241,14 +240,14 @@ logmsg "Install and Setup Etcd"
 yum install -y etcd
 
 # Edit /etc/etcd/etcd.conf
-if ! grep -q ${CONTROLLER_IP} /etc/etcd/etcd.conf; then
+if ! grep -q ${CONTROLLER} /etc/etcd/etcd.conf; then
   sed -i 's/ETCD_DATA_DIR=.*/ETCD_DATA_DIR="\/var\/lib\/etcd\/default.etcd"/' /etc/etcd/etcd.conf
-  sed -i "s/#ETCD_LISTEN_PEER_URLS=.*/ETCD_LISTEN_PEER_URLS=\"http:\/\/${CONTROLLER_IP}:2380\"/" /etc/etcd/etcd.conf
-  sed -i "s/ETCD_LISTEN_CLIENT_URLS=.*/ETCD_LISTEN_CLIENT_URLS=\"http:\/\/${CONTROLLER_IP}:2379\"/" /etc/etcd/etcd.conf
+  sed -i "s/#ETCD_LISTEN_PEER_URLS=.*/ETCD_LISTEN_PEER_URLS=\"http:\/\/${CONTROLLER}:2380\"/" /etc/etcd/etcd.conf
+  sed -i "s/ETCD_LISTEN_CLIENT_URLS=.*/ETCD_LISTEN_CLIENT_URLS=\"http:\/\/${CONTROLLER}:2379\"/" /etc/etcd/etcd.conf
   sed -i 's/ETCD_NAME=.*/ETCD_NAME="controller"/' /etc/etcd/etcd.conf
-  sed -i "s/#ETCD_INITIAL_ADVERTISE_PEER_URLS=.*/ETCD_INITIAL_ADVERTISE_PEER_URLS=\"http:\/\/${CONTROLLER_IP}:2380\"/" /etc/etcd/etcd.conf
-  sed -i "s/ETCD_ADVERTISE_CLIENT_URLS=.*/ETCD_ADVERTISE_CLIENT_URLS=\"http:\/\/${CONTROLLER_IP}:2379\"/" /etc/etcd/etcd.conf
-  sed -i "s/#ETCD_INITIAL_CLUSTER=.*/ETCD_INITIAL_CLUSTER=\"controller=http:\/\/${CONTROLLER_IP}:2380\"/" /etc/etcd/etcd.conf
+  sed -i "s/#ETCD_INITIAL_ADVERTISE_PEER_URLS=.*/ETCD_INITIAL_ADVERTISE_PEER_URLS=\"http:\/\/${CONTROLLER}:2380\"/" /etc/etcd/etcd.conf
+  sed -i "s/ETCD_ADVERTISE_CLIENT_URLS=.*/ETCD_ADVERTISE_CLIENT_URLS=\"http:\/\/${CONTROLLER}:2379\"/" /etc/etcd/etcd.conf
+  sed -i "s/#ETCD_INITIAL_CLUSTER=.*/ETCD_INITIAL_CLUSTER=\"controller=http:\/\/${CONTROLLER}:2380\"/" /etc/etcd/etcd.conf
   sed -i 's/#ETCD_INITIAL_CLUSTER_TOKEN=.*/ETCD_INITIAL_CLUSTER_TOKEN="etcd-cluster-01"/' /etc/etcd/etcd.conf
   sed -i 's/#ETCD_INITIAL_CLUSTER_STATE=.*/ETCD_INITIAL_CLUSTER_STATE="new"/' /etc/etcd/etcd.conf
 fi
@@ -260,8 +259,6 @@ systemctl start etcd
 ## 
 ## Job for etcd.service failed because the control process exited with error code. See "systemctl status etcd.service" and "journalctl -xe" for details.
 ## 
-
-exit 0
 
 #
 # Install OpenStack Services
@@ -316,6 +313,8 @@ keystone-manage bootstrap --bootstrap-password ${ADMIN_PASS} \
   --bootstrap-internal-url http://${CONTROLLER}:5000/v3/ \
   --bootstrap-public-url http://${CONTROLLER}:5000/v3/ \
   --bootstrap-region-id RegionOne
+
+exit 0
 
 #
 # Configure the Apache HTTP Server
