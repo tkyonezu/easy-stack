@@ -53,6 +53,7 @@ PUB_GATEWAY=10.0.2.1
 
 # Controller Node
 CONTROLLER=${PRIV_HOST}
+CONTROLLER_IP=$(PRIV_IP)
 
 #
 # OpenStack Queens Administrator Guide
@@ -167,7 +168,7 @@ yum install -y openstack-selinux
 logmsg "Install and Setup SQL Database"
 
 # Install and configure components
-yum install mariadb mariadb-server python2-PyMySQL
+yum install -y mariadb mariadb-server python2-PyMySQL
 
 if ! grep -q ${PRIV_IP} /etc/my.cnf.d/mysql-clients.cnf; then
   cat <<EOF >>/etc/my.cnf.d/mysql-clients.cnf
@@ -240,14 +241,14 @@ logmsg "Install and Setup Etcd"
 yum install -y etcd
 
 # Edit /etc/etcd/etcd.conf
-if ! grep -q ${CONTROLLER} /etc/etcd/etcd.conf; then
+if ! grep -q ${CONTROLLER_IP} /etc/etcd/etcd.conf; then
   sed -i 's/ETCD_DATA_DIR=.*/ETCD_DATA_DIR="\/var\/lib\/etcd\/default.etcd"/' /etc/etcd/etcd.conf
-  sed -i "s/#ETCD_LISTEN_PEER_URLS=.*/ETCD_LISTEN_PEER_URLS=\"http:\/\/${CONTROLLER}:2380\"/" /etc/etcd/etcd.conf
-  sed -i "s/ETCD_LISTEN_CLIENT_URLS=.*/ETCD_LISTEN_CLIENT_URLS=\"http:\/\/${CONTROLLER}:2379\"/" /etc/etcd/etcd.conf
+  sed -i "s/#ETCD_LISTEN_PEER_URLS=.*/ETCD_LISTEN_PEER_URLS=\"http:\/\/${CONTROLLER_IP}:2380\"/" /etc/etcd/etcd.conf
+  sed -i "s/ETCD_LISTEN_CLIENT_URLS=.*/ETCD_LISTEN_CLIENT_URLS=\"http:\/\/${CONTROLLER_IP}:2379\"/" /etc/etcd/etcd.conf
   sed -i 's/ETCD_NAME=.*/ETCD_NAME="controller"/' /etc/etcd/etcd.conf
-  sed -i "s/#ETCD_INITIAL_ADVERTISE_PEER_URLS=.*/ETCD_INITIAL_ADVERTISE_PEER_URLS=\"http:\/\/${CONTROLLER}:2380\"/" /etc/etcd/etcd.conf
-  sed -i "s/ETCD_ADVERTISE_CLIENT_URLS=.*/ETCD_ADVERTISE_CLIENT_URLS=\"http:\/\/${CONTROLLER}:2379\"/" /etc/etcd/etcd.conf
-  sed -i "s/#ETCD_INITIAL_CLUSTER=.*/ETCD_INITIAL_CLUSTER=\"controller=http:\/\/${CONTROLLER}:2380\"/" /etc/etcd/etcd.conf
+  sed -i "s/#ETCD_INITIAL_ADVERTISE_PEER_URLS=.*/ETCD_INITIAL_ADVERTISE_PEER_URLS=\"http:\/\/${CONTROLLER_IP}:2380\"/" /etc/etcd/etcd.conf
+  sed -i "s/ETCD_ADVERTISE_CLIENT_URLS=.*/ETCD_ADVERTISE_CLIENT_URLS=\"http:\/\/${CONTROLLER_IP}:2379\"/" /etc/etcd/etcd.conf
+  sed -i "s/#ETCD_INITIAL_CLUSTER=.*/ETCD_INITIAL_CLUSTER=\"controller=http:\/\/${CONTROLLER_IP}:2380\"/" /etc/etcd/etcd.conf
   sed -i 's/#ETCD_INITIAL_CLUSTER_TOKEN=.*/ETCD_INITIAL_CLUSTER_TOKEN="etcd-cluster-01"/' /etc/etcd/etcd.conf
   sed -i 's/#ETCD_INITIAL_CLUSTER_STATE=.*/ETCD_INITIAL_CLUSTER_STATE="new"/' /etc/etcd/etcd.conf
 fi
@@ -255,6 +256,12 @@ fi
 # Finalize installation
 systemctl enable etcd
 systemctl start etcd
+
+## 
+## Job for etcd.service failed because the control process exited with error code. See "systemctl status etcd.service" and "journalctl -xe" for details.
+## 
+
+exit 0
 
 #
 # Install OpenStack Services
